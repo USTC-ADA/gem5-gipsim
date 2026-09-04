@@ -36,8 +36,9 @@
 microcode = """
 def macroop CALL_NEAR_I
 {
-    # Make the default data size of calls 64 bits in 64 bit mode
-    .adjust_env oszIn64Override
+    # Near calls have a fixed 64-bit operand size in 64-bit mode; 66H is
+    # ignored rather than selecting a 16-bit target/stack operation.
+    .adjust_env maxOsz
     .function_call
     .control_direct
 
@@ -51,8 +52,8 @@ def macroop CALL_NEAR_I
 
 def macroop CALL_NEAR_R
 {
-    # Make the default data size of calls 64 bits in 64 bit mode
-    .adjust_env oszIn64Override
+    # Near calls have a fixed 64-bit operand size in 64-bit mode.
+    .adjust_env maxOsz
     .function_call
     .control_indirect
 
@@ -65,8 +66,8 @@ def macroop CALL_NEAR_R
 
 def macroop CALL_NEAR_M
 {
-    # Make the default data size of calls 64 bits in 64 bit mode
-    .adjust_env oszIn64Override
+    # Near calls have a fixed 64-bit operand size in 64-bit mode.
+    .adjust_env maxOsz
     .function_call
     .control_indirect
 
@@ -80,8 +81,8 @@ def macroop CALL_NEAR_M
 
 def macroop CALL_NEAR_P
 {
-    # Make the default data size of calls 64 bits in 64 bit mode
-    .adjust_env oszIn64Override
+    # Near calls have a fixed 64-bit operand size in 64-bit mode.
+    .adjust_env maxOsz
     .function_call
     .control_indirect
 

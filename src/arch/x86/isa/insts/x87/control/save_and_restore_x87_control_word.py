@@ -41,6 +41,7 @@ def macroop FLDCW_M {
 };
 
 def macroop FLDCW_P {
+    rdip t7
     ld t1, seg, riprel, disp, dataSize=2
     wrval fcw, t1
 };

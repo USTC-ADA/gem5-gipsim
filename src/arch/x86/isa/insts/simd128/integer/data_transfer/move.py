@@ -129,8 +129,8 @@ def macroop LDDQU_XMM_M {
 
 def macroop LDDQU_XMM_P {
     rdip t7
-    ldfp xmml, seg, sib, "DISPLACEMENT", dataSize=8
-    ldfp xmmh, seg, sib, "DISPLACEMENT + 8", dataSize=8
+    ldfp xmml, seg, riprel, "DISPLACEMENT", dataSize=8
+    ldfp xmmh, seg, riprel, "DISPLACEMENT + 8", dataSize=8
 };
 
 def macroop PMOVSXDQ_XMM_XMM {

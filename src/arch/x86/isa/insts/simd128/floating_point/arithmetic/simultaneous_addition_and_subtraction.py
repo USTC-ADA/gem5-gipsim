@@ -50,8 +50,8 @@ def macroop ADDSUBPD_XMM_M {
 
 def macroop ADDSUBPD_XMM_P {
     rdip t7
-    ldfp ufp1, seg, sib, disp, dataSize=8
-    ldfp ufp2, seg, sib, "DISPLACEMENT+8", dataSize=8
+    ldfp ufp1, seg, riprel, disp, dataSize=8
+    ldfp ufp2, seg, riprel, "DISPLACEMENT+8", dataSize=8
     msubf xmmlm, xmml, ufp1, size=8, ext=0
     maddf xmmhm, xmmh, ufp2, size=8, ext=0
 };

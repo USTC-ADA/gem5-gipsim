@@ -36,8 +36,9 @@
 microcode = """
 def macroop RET_NEAR
 {
-    # Make the default data size of rets 64 bits in 64 bit mode
-    .adjust_env oszIn64Override
+    # Near returns have a fixed 64-bit operand size in 64-bit mode; 66H is
+    # ignored rather than selecting a 16-bit stack/target operation.
+    .adjust_env maxOsz
     .function_return
     .control_indirect
 
@@ -49,8 +50,8 @@ def macroop RET_NEAR
 
 def macroop RET_NEAR_I
 {
-    # Make the default data size of rets 64 bits in 64 bit mode
-    .adjust_env oszIn64Override
+    # Near returns have a fixed 64-bit operand size in 64-bit mode.
+    .adjust_env maxOsz
     .function_return
     .control_indirect
 

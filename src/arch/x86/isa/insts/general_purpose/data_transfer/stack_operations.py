@@ -110,6 +110,10 @@ def macroop PUSH_P {
 };
 
 def macroop PUSH_S {
+    # Segment-register pushes use the same long-mode default stack width as
+    # the other PUSH forms (64 bits, or 16 bits with operand-size override).
+    .adjust_env oszIn64Override
+
     rdsel t1, sr
     st t1, ss, [1, t0, rsp], "-env.dataSize", addressSize=ssz
     subi rsp, rsp, dsz, dataSize=ssz
@@ -164,7 +168,9 @@ def macroop ENTER_I_I {
     limm t1, imm, dataSize=8
     zexti t2, t1, 15, dataSize=8
     srli t1, t1, 16, dataSize=8
-    zexti t1, t1, 5, dataSize=8
+    # Intel defines the nesting level as imm8 modulo 32.  zexti's bit
+    # argument is inclusive, so bit 4 (rather than bit 5) is the high bit.
+    zexti t1, t1, 4, dataSize=8
     # t1 is now the masked nesting level, and t2 is the amount of storage.
 
     # Push rbp.

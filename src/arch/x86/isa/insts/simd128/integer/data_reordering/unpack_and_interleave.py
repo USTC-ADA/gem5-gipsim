@@ -163,7 +163,7 @@ def macroop PUNPCKHQDQ_XMM_M {
 def macroop PUNPCKHQDQ_XMM_P {
     rdip t7
     lea t1, seg, riprel, disp, dataSize=asz
-    ldfp ufp1, seg, riprel, 8, dataSize=8
+    ldfp ufp1, seg, [1, t0, t1], 8, dataSize=8
     movfp xmml, xmmh
     movfp xmmh, ufp1
 };

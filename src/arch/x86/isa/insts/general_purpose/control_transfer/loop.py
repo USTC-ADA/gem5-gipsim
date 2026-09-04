@@ -37,8 +37,8 @@ microcode = """
 def macroop LOOP_I {
     .control_direct
 
-    # Make the default data size of pops 64 bits in 64 bit mode
-    .adjust_env oszIn64Override
+    # LOOP ignores 66H in 64-bit mode; address size alone selects the count.
+    .adjust_env maxOsz
     rdip t1
     subi rcx, rcx, 1, flags=(EZF,), dataSize=asz
     wripi t1, imm, flags=(nCEZF,)
@@ -47,8 +47,8 @@ def macroop LOOP_I {
 def macroop LOOPNE_I {
     .control_direct
 
-    # Make the default data size of pops 64 bits in 64 bit mode
-    .adjust_env oszIn64Override
+    # LOOP ignores 66H in 64-bit mode; address size alone selects the count.
+    .adjust_env maxOsz
     rdip t1
     subi rcx, rcx, 1, flags=(EZF,), dataSize=asz
     wripi t1, imm, flags=(CSTRnZnEZF,)
@@ -57,8 +57,8 @@ def macroop LOOPNE_I {
 def macroop LOOPE_I {
     .control_direct
 
-    # Make the default data size of pops 64 bits in 64 bit mode
-    .adjust_env oszIn64Override
+    # LOOP ignores 66H in 64-bit mode; address size alone selects the count.
+    .adjust_env maxOsz
     rdip t1
     subi rcx, rcx, 1, flags=(EZF,), dataSize=asz
     wripi t1, imm, flags=(CSTRZnEZF,)
