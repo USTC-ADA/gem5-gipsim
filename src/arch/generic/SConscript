@@ -50,6 +50,7 @@ SimObject('BaseISA.py', sim_objects=['BaseISA'])
 SimObject('BaseMMU.py', sim_objects=['BaseMMU'])
 SimObject('BaseTLB.py', sim_objects=['BaseTLB'], enums=['TypeTLB'])
 SimObject('InstDecoder.py', sim_objects=['InstDecoder'])
+SimObject('DecoderQuery.py', sim_objects=['DecoderQuery'])
 
 DebugFlag('PageTableWalker',
           "Page table walker state machine debugging")
@@ -59,3 +60,4 @@ GTest('vec_reg.test', 'vec_reg.test.cc')
 GTest('vec_pred_reg.test', 'vec_pred_reg.test.cc')
 
 Source('decoder.cc')
+Source('decoder_query.cc')

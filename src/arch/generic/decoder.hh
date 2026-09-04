@@ -28,6 +28,11 @@
 #ifndef __ARCH_GENERIC_DECODER_HH__
 #define __ARCH_GENERIC_DECODER_HH__
 
+#include <algorithm>
+#include <cstring>
+#include <utility>
+#include <vector>
+
 #include "arch/generic/pcstate.hh"
 #include "base/bitfield.hh"
 #include "base/intmath.hh"
@@ -42,12 +47,20 @@ namespace gem5
 class InstDecoder : public SimObject
 {
   protected:
+    struct InstructionFetch
+    {
+        Addr vaddr;
+        Addr paddr;
+        std::vector<uint8_t> bytes;
+    };
+
     void *_moreBytesPtr;
     size_t _moreBytesSize;
     Addr _pcMask;
 
     bool instDone = false;
     bool outOfBytes = true;
+    std::vector<InstructionFetch> instructionFetches;
 
   public:
     template <typename MoreBytesType>
@@ -95,6 +108,51 @@ class InstDecoder : public SimObject
     void *moreBytesPtr() const { return _moreBytesPtr; }
     size_t moreBytesSize() const { return _moreBytesSize; }
     Addr pcMask() const { return _pcMask; }
+
+    /**
+     * Preserve the bytes and address translation returned by the real
+     * instruction-fetch transaction.  Retirement tracers must consume this
+     * state instead of translating or reading code memory functionally.
+     */
+    void beginInstructionFetch() { instructionFetches.clear(); }
+
+    void
+    recordInstructionFetch(Addr vaddr, Addr paddr)
+    {
+        InstructionFetch fetch{vaddr, paddr,
+                               std::vector<uint8_t>(_moreBytesSize)};
+        std::memcpy(fetch.bytes.data(), _moreBytesPtr, _moreBytesSize);
+        instructionFetches.push_back(std::move(fetch));
+    }
+
+    bool
+    getFetchedInstruction(Addr vaddr, size_t size,
+                          std::vector<uint8_t> &bytes, Addr &paddr) const
+    {
+        bytes.clear();
+        bytes.reserve(size);
+        bool first = true;
+        for (size_t offset = 0; offset < size; ++offset) {
+            const Addr address = vaddr + offset;
+            const auto fetch = std::find_if(
+                instructionFetches.begin(), instructionFetches.end(),
+                [address](const InstructionFetch &candidate) {
+                    return address >= candidate.vaddr &&
+                        address - candidate.vaddr < candidate.bytes.size();
+                });
+            if (fetch == instructionFetches.end()) {
+                bytes.clear();
+                return false;
+            }
+            const size_t fetchOffset = address - fetch->vaddr;
+            if (first) {
+                paddr = fetch->paddr + fetchOffset;
+                first = false;
+            }
+            bytes.push_back(fetch->bytes[fetchOffset]);
+        }
+        return !first;
+    }
 
     /**
      * Is an instruction ready to be decoded?
