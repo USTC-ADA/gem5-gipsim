@@ -24,6 +24,7 @@
 #include "arch/riscv/pcstate.hh"
 #include "arch/x86/decoder.hh"
 #include "arch/x86/insts/badmicroop.hh"
+#include "arch/x86/insts/microldstop.hh"
 #include "arch/x86/pcstate.hh"
 #include "arch/x86/regs/misc.hh"
 #include "base/logging.hh"
@@ -189,6 +190,12 @@ writeMicroop(std::ostream &output, const StaticInstPtr &inst, size_t index)
     writeRegisters(output, inst, true);
     output << ",\"dst_regs\":";
     writeRegisters(output, inst, false);
+    if (const auto *memory = dynamic_cast<const X86ISA::MemOp *>(inst.get())) {
+        // Width of the active micro-op operand, not a cache transaction.
+        const unsigned parts =
+            dynamic_cast<const X86ISA::LdStSplitOp *>(inst.get()) ? 2 : 1;
+        output << ",\"memory_bytes\":" << parts * memory->dataSize;
+    }
     output << '}';
 }
 

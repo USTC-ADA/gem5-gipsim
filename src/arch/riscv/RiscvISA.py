@@ -94,7 +94,9 @@ class RiscvISA(BaseISA):
 
     riscv_type = Param.RiscvType("RV64", "RV32 or RV64")
 
-    enable_rvv = Param.Bool(True, "Enable vector extension")
+    # The alignment environment targets RV64GC. Vector-capable experiments
+    # can still opt in explicitly; the default must not advertise RVV.
+    enable_rvv = Param.Bool(False, "Enable vector extension")
     vlen = Param.RiscvVectorLength(
         256,
         "Length of each vector register in bits. \

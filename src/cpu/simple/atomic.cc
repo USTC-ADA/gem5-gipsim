@@ -368,6 +368,9 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t *data, unsigned size,
 
     if (traceData)
         traceData->setMem(addr, size, flags);
+    uint8_t *const trace_data = data;
+    bool performed_access = false;
+    Addr trace_paddr = 0;
 
     dcache_latency = 0;
 
@@ -405,6 +408,12 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t *data, unsigned size,
             panic_if(pkt.isError(), "Data fetch (%s) failed: %s",
                     pkt.getAddrRange().to_string(), pkt.print());
 
+            if (traceData) {
+                if (!performed_access)
+                    trace_paddr = req->getPaddr();
+                performed_access = true;
+            }
+
             if (req->isLLSC()) {
                 thread->getIsaPtr()->handleLockedRead(req);
             }
@@ -419,6 +428,12 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t *data, unsigned size,
             if (req->isLockedRMW() && fault == NoFault) {
                 assert(!locked);
                 locked = true;
+            }
+            if (traceData && performed_access) {
+                traceData->setMemoryAccess(
+                    addr, trace_paddr, size, flags,
+                    trace::InstRecord::MemoryAccess::Type::Read,
+                    trace_data, nullptr, byte_enable);
             }
             return fault;
         }
@@ -454,6 +469,11 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
 
     if (traceData)
         traceData->setMem(addr, size, flags);
+    std::vector<uint8_t> trace_written_data;
+    if (traceData)
+        trace_written_data.assign(data, data + size);
+    bool performed_access = false;
+    Addr trace_paddr = 0;
 
     dcache_latency = 0;
 
@@ -507,6 +527,11 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
                 dcache_access = true;
                 panic_if(pkt.isError(), "Data write (%s) failed: %s",
                         pkt.getAddrRange().to_string(), pkt.print());
+                if (traceData) {
+                    if (!performed_access)
+                        trace_paddr = req->getPaddr();
+                    performed_access = true;
+                }
                 if (req->isSwap()) {
                     assert(res && curr_frag_id == 0);
                     memcpy(res, pkt.getConstPtr<uint8_t>(), size);
@@ -524,6 +549,13 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size, Addr addr,
             if (req->isLockedRMW() && fault == NoFault) {
                 assert(!req->isMasked());
                 locked = false;
+            }
+
+            if (fault == NoFault && traceData && performed_access) {
+                traceData->setMemoryAccess(
+                    addr, trace_paddr, size, flags,
+                    trace::InstRecord::MemoryAccess::Type::Write, nullptr,
+                    trace_written_data.data(), byte_enable);
             }
 
             //Supress faults from prefetches.
@@ -551,6 +583,9 @@ AtomicSimpleCPU::amoMem(Addr addr, uint8_t* data, unsigned size,
 
     // use the CPU's statically allocated amo request and packet objects
     const RequestPtr &req = data_amo_req;
+    AtomicOpFunctorPtr trace_amo;
+    if (traceData && amo_op)
+        trace_amo.reset(amo_op->clone());
 
     if (traceData)
         traceData->setMem(addr, size, flags);
@@ -596,6 +631,17 @@ AtomicSimpleCPU::amoMem(Addr addr, uint8_t* data, unsigned size,
 
         panic_if(pkt.isError(), "Atomic access (%s) failed: %s",
                 pkt.getAddrRange().to_string(), pkt.print());
+        if (traceData) {
+            /* The response buffer is the value actually read by the AMO.
+             * Apply a cloned functor to that returned value to obtain the
+             * value written by this same transaction, without a post-read. */
+            std::vector<uint8_t> written(data, data + size);
+            (*trace_amo)(written.data());
+            traceData->setMemoryAccess(
+                addr, req->getPaddr(), size, flags,
+                trace::InstRecord::MemoryAccess::Type::Atomic, data,
+                written.data());
+        }
         assert(!req->isLLSC());
     }
 
@@ -653,6 +699,11 @@ AtomicSimpleCPU::tick()
 
         bool needToFetch = !isRomMicroPC(pc.microPC()) && !curMacroStaticInst;
         if (needToFetch) {
+            /* Clear only the auxiliary fetch history for a new architectural
+             * instruction.  Keep earlier chunks while a variable-length
+             * instruction is still being assembled. */
+            if (t_info.fetchOffset == 0)
+                thread->decoder->beginInstructionFetch();
             ifetch_req->taskId(taskId());
             setupFetchRequest(ifetch_req);
             fault = thread->mmu->translateAtomic(ifetch_req, thread->getTC(),
@@ -674,10 +725,29 @@ AtomicSimpleCPU::tick()
                 //{
                     icache_access = true;
                     icache_latency = fetchInstMem();
+                    /* Copy the bytes and translation returned by this real
+                     * fetch.  This records decoder input without changing
+                     * it. */
+                    thread->decoder->recordInstructionFetch(
+                        ifetch_req->getVaddr(), ifetch_req->getPaddr());
                 //}
             }
 
             preExecute();
+            if (traceData && curStaticInst) {
+                StaticInstPtr architecturalInst = curMacroStaticInst;
+                if (!architecturalInst)
+                    architecturalInst = curStaticInst;
+                std::vector<uint8_t> encoding;
+                Addr fetchPaddr = 0;
+                if (architecturalInst->hasSize() &&
+                    thread->decoder->getFetchedInstruction(
+                        pc.instAddr(), architecturalInst->size(),
+                        encoding, fetchPaddr)) {
+                    traceData->setFetchedInstruction(
+                        fetchPaddr, std::move(encoding));
+                }
+            }
 
             Tick stall_ticks = 0;
             if (curStaticInst) {
@@ -688,7 +758,7 @@ AtomicSimpleCPU::tick()
                     countInst();
                     ppCommit->notify(std::make_pair(thread, curStaticInst));
                 } else if (traceData) {
-                    traceFault();
+                    traceFault(fault);
                 }
 
                 if (fault != NoFault &&

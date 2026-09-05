@@ -373,6 +373,10 @@ class SimpleExecContext : public ExecContext
     setMemAccPredicate(bool val) override
     {
         thread->setMemAccPredicate(val);
+
+        if (cpu->traceData) {
+            cpu->traceData->setMemAccPredicate(val);
+        }
     }
 
     uint64_t

@@ -128,7 +128,7 @@ class BaseSimpleCPU : public BaseCPU
      * the handler won't delete the record and it will annotate
      * the record as coming from a faulting instruction.
      */
-    void traceFault();
+    void traceFault(const Fault &fault);
 
     std::unique_ptr<PCStateBase> preExecuteTempPC;
 

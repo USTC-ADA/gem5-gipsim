@@ -41,6 +41,7 @@
 
 #include "cpu/simple/base.hh"
 
+#include "arch/generic/debugfaults.hh"
 #include "arch/generic/decoder.hh"
 #include "base/cprintf.hh"
 #include "base/inifile.hh"
@@ -259,9 +260,16 @@ BaseSimpleCPU::wakeup(ThreadID tid)
 }
 
 void
-BaseSimpleCPU::traceFault()
+BaseSimpleCPU::traceFault(const Fault &fault)
 {
     if (debug::ExecFaulting) {
+        traceData->setFaulting(true);
+    } else if (traceData->needsFaultNotification()) {
+        if (std::dynamic_pointer_cast<GenericISA::M5DebugFault>(fault)) {
+            /* Non-terminating debug micro-ops advance the micro-PC and are
+             * part of the retired path, rather than an architectural fault. */
+            return;
+        }
         traceData->setFaulting(true);
     } else {
         delete traceData;

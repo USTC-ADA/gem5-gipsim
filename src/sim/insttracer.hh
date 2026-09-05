@@ -41,7 +41,11 @@
 #ifndef __INSTRECORD_HH__
 #define __INSTRECORD_HH__
 
+#include <cassert>
 #include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include "arch/generic/pcstate.hh"
 #include "base/types.hh"
@@ -60,7 +64,32 @@ namespace trace {
 
 class InstRecord
 {
+  public:
+    struct MemoryAccess
+    {
+        enum class Type
+        {
+            Read,
+            Write,
+            Atomic,
+        };
+
+        Addr vaddr;
+        Addr paddr;
+        Addr size;
+        unsigned flags;
+        Type type;
+        /** Value returned by a load or AMO; empty for a plain store. */
+        std::vector<uint8_t> readValue;
+        /** Value written by a store or AMO; empty for a plain load. */
+        std::vector<uint8_t> writtenValue;
+        /** Enabled bytes in this logical access; empty means all enabled. */
+        std::vector<bool> byteEnable;
+    };
+
   protected:
+    virtual void onFetchedInstruction() {}
+
     Tick when;
 
     // The following fields are initialized by the constructor and
@@ -137,6 +166,15 @@ class InstRecord
      */
     bool mem_valid = false;
 
+    /**
+     * The completed logical memory access of this dynamic micro-op, if any.
+     * A CPU may split that access into multiple internal transactions, but
+     * those fragments are deliberately not exposed through InstRecord.  The
+     * value is installed only after translation and after a conditional
+     * access has been confirmed to occur.
+     */
+    std::optional<MemoryAccess> memoryAccess;
+
     /** @ingroup fetch_seq
      * Are the fetch sequence number fields valid?
      */
@@ -149,6 +187,18 @@ class InstRecord
     /** is the predicate for execution this inst true or false (not execed)?
      */
     bool predicate = true;
+
+    /**
+     * Is the instruction's memory access predicate true?  This is separate
+     * from the generic execution predicate for vector memory micro-ops whose
+     * instruction body executes while the selected lane performs no access.
+     */
+    bool memAccPredicate = true;
+
+    /** Physical first byte address of the architectural instruction fetch. */
+    Addr fetchPaddr = 0;
+    bool fetchPaddrValid = false;
+    std::vector<uint8_t> encoding;
 
     /**
      * Did the execution of this instruction fault? (requires ExecFaulting
@@ -178,6 +228,24 @@ class InstRecord
         size = s;
         flags = f;
         mem_valid = true;
+    }
+
+    void
+    setMemoryAccess(Addr vaddr, Addr paddr, Addr size, unsigned flags,
+                    MemoryAccess::Type type,
+                    const uint8_t *read_value = nullptr,
+                    const uint8_t *written_value = nullptr,
+                    const std::vector<bool> &byte_enable = {})
+    {
+        assert(!memoryAccess.has_value());
+        assert(byte_enable.empty() || byte_enable.size() == size);
+        MemoryAccess access{vaddr, paddr, size, flags, type, {}, {},
+                            byte_enable};
+        if (read_value)
+            access.readValue.assign(read_value, read_value + size);
+        if (written_value)
+            access.writtenValue.assign(written_value, written_value + size);
+        memoryAccess = std::move(access);
     }
 
     template <typename T, size_t N>
@@ -281,8 +349,31 @@ class InstRecord
     }
 
     void setPredicate(bool val) { predicate = val; }
+    void setMemAccPredicate(bool val) { memAccPredicate = val; }
+
+    void
+    setFetchPaddr(Addr value)
+    {
+        fetchPaddr = value;
+        fetchPaddrValid = true;
+    }
+
+    void
+    setFetchedInstruction(Addr paddr, std::vector<uint8_t> bytes)
+    {
+        setFetchPaddr(paddr);
+        encoding = std::move(bytes);
+        onFetchedInstruction();
+    }
 
     void setFaulting(bool val) { faulting = val; }
+
+    /*
+     * Most tracers only request faulting records when ExecFaulting is
+     * enabled.  Retirement tracers may additionally need a notification to
+     * discard micro-ops already accumulated for a faulting macro-op.
+     */
+    virtual bool needsFaultNotification() const { return false; }
 
     virtual void dump() = 0;
 
@@ -297,6 +388,10 @@ class InstRecord
     Addr getSize() const { return size; }
     unsigned getFlags() const { return flags; }
     bool getMemValid() const { return mem_valid; }
+    const std::optional<MemoryAccess> &getMemoryAccess() const
+    {
+        return memoryAccess;
+    }
 
     uint64_t getIntData() const { return data.asInt; }
     double getFloatData() const { return data.asDouble; }
@@ -309,6 +404,11 @@ class InstRecord
     bool getCpSeqValid() const { return cp_seq_valid; }
 
     bool getFaulting() const { return faulting; }
+    bool getPredicate() const { return predicate; }
+    bool getMemAccPredicate() const { return memAccPredicate; }
+    bool getFetchPaddrValid() const { return fetchPaddrValid; }
+    Addr getFetchPaddr() const { return fetchPaddr; }
+    const std::vector<uint8_t> &getEncoding() const { return encoding; }
 };
 
 /**
@@ -344,6 +444,10 @@ class InstTracer : public SimObject
     {}
 
     virtual ~InstTracer() {}
+
+    /** ROI control invoked by simulation exit-event handlers. */
+    virtual void startROI() {}
+    virtual void endROI(const std::string &reason) {}
 
     virtual InstRecord *
         getInstRecord(Tick when, ThreadContext *tc,

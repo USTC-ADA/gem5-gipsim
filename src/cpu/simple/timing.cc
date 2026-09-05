@@ -401,7 +401,7 @@ TimingSimpleCPU::translationFault(const Fault &fault)
     updateCycleCounters(BaseCPU::CPU_STATE_ON);
 
     if ((fault != NoFault) && traceData) {
-        traceFault();
+        traceFault(fault);
     }
 
     postExecute();
@@ -861,7 +861,7 @@ TimingSimpleCPU::completeIfetch(PacketPtr pkt)
         // ifetch
         if (_status == BaseSimpleCPU::Running) {
             if (fault != NoFault && traceData) {
-                traceFault();
+                traceFault(fault);
             }
 
             postExecute();
@@ -879,7 +879,7 @@ TimingSimpleCPU::completeIfetch(PacketPtr pkt)
         if (fault == NoFault)
             countInst();
         else if (traceData) {
-            traceFault();
+            traceFault(fault);
         }
 
         postExecute();
@@ -1066,7 +1066,7 @@ TimingSimpleCPU::completeDataAccess(PacketPtr pkt)
     if (fault == NoFault)
         countInst();
     else if (traceData) {
-        traceFault();
+        traceFault(fault);
     }
 
     delete pkt;

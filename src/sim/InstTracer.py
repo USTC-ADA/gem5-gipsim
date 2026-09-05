@@ -38,6 +38,7 @@
 
 from m5.params import *
 from m5.SimObject import SimObject
+from m5.util.pybind import PyBindMethod
 
 
 class InstDisassembler(SimObject):
@@ -51,6 +52,11 @@ class InstTracer(SimObject):
     cxx_header = "sim/insttracer.hh"
     cxx_class = "gem5::trace::InstTracer"
     abstract = True
+
+    cxx_exports = [
+        PyBindMethod("startROI"),
+        PyBindMethod("endROI"),
+    ]
 
     disassembler = Param.InstDisassembler(
         InstDisassembler(), "Instruction Disassembler"
