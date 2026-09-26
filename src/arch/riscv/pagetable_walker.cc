@@ -297,8 +297,17 @@ Walker::startWalkWrapper()
             Fault timingFault = currState->walk();
             if (timingFault != NoFault) {
                 currStates.pop_front();
+
+                currState->translation->finish(
+                    timingFault, currState->req,
+                    currState->tc, currState->mode);
+
                 delete currState;
                 currState = NULL;
+
+                if (!currStates.empty() && !startWalkWrapperEvent.scheduled()) {
+                    schedule(startWalkWrapperEvent, clockEdge(Cycles(1)));
+                }
             }
         }
         else {
